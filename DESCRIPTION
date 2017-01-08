@@ -1,0 +1,22 @@
+Package: dbSamplr
+Title: Acceptance criteria for database samples
+Version: 0.1
+Authors@R: person("Paul", "Metcalfe",
+                  email="paul.metcalfe@gmail.com",
+		  role=c("aut", "cre"))
+Description: "Group Sequential"-alike testing for database screening.  These
+    calculations can also be done in the gsDesign package.  This one is
+    quicker!
+Depends:
+    R (>= 3.1.1)
+LinkingTo: Rcpp
+Imports:
+    Rcpp
+Licence: GPL-2
+LazyData: true
+Suggests:
+    testthat,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+RoxygenNote: 5.0.1

@@ -1,0 +1,85 @@
+---
+title: "Database sampling"
+date: "2017-01-08"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to extrapolatr}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+Sometimes one wishes to sample (perhaps for quality) a large number of
+items to determine that the occurrence probability of unusual cases is
+sufficiently low.  Statistically, this is the problem of determining
+an unknown binomial probability.  Some efficiencies can be gained by
+using a simple group-sequential design, but that does require
+computation to determine its operating characteristics.
+
+Herein we suppose that we're sampling a $250000$-item database, and we
+want to be sure that the occurrence probability is less than $0.1\%$.
+We suppose we'll look at the database after $10000$, $30000$, and
+$100000$ items.  After $10000$ items we'll stop sampling if we've seen
+$4$ or fewer cases.  After $30000$ items we'll stop if we've seen $19$
+or fewer cases.  And after $100000$ items we'll stop if we've see $79$
+or fewer cases.
+
+```{r}
+steps <- c(10000, 30000, 100000)
+crits <- c(4, 19, 79)
+```
+
+We can look at the operating characteristics thereof relatively
+simply.  We first have a look at the stopping probabilities when the
+true event probability is $0.1\%$.
+
+```{r}
+library("dbSamplr")
+
+tot.1 <- gsProbs(0.1/100, steps, crits)
+tot.1
+tot.1 %*% steps + 250000 * (1 - sum(tot.1))
+sum(tot.1)
+```
+
+Now we'll see what happens if the true event probability is $0.075\%$.
+
+```{r}
+tot.2 <- gsProbs(0.075/100, steps, crits)
+tot.2
+tot.2 %*% steps + 250000 * (1 - sum(tot.2))
+sum(tot.2)
+```
+
+Now we'll see what happens if the true event probability is $0.05\%$.
+
+```{r}
+tot.3 <- gsProbs(0.05/100, steps, crits)
+tot.3
+tot.3 %*% steps + 250000 * (1 - sum(tot.3))
+sum(tot.3)
+```
+
+And finally we'll see what happens if the true event probability is
+$0.01\%$.
+
+```{r}
+tot.4 <- gsProbs(0.01/100, steps, crits)
+tot.4
+tot.4 %*% steps + 250000 * (1 - sum(tot.4))
+sum(tot.4)
+```
+
+Some plots are possible.
+
+```{r}
+all.res <- cbind(tot.1, tot.2, tot.3, tot.4)
+
+matplot(steps, all.res,
+        ylim=c(0, 1), type='l',
+	log='x',
+	axes=FALSE,
+	xlab='Sample point',
+	ylab='Stopping probability')
+axis(1, at=steps, label=format(steps, scientific=FALSE))
+axis(2, las=1)
+```
