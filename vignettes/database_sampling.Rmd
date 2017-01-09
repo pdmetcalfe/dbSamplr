@@ -1,31 +1,41 @@
 ---
-title: "Database sampling"
+title: "Larger scale acceptance sampling"
 date: "2017-01-08"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Introduction to extrapolatr}
+  %\VignetteIndexEntry{Larger scale acceptance sampling}
   %\VignetteEngine{knitr::rmarkdown}
   \usepackage[utf8]{inputenc}
 ---
 
+# Introduction
+
 Sometimes one wishes to sample (perhaps for quality) a large number of
 items to determine that the occurrence probability of unusual cases is
-sufficiently low.  Statistically, this is the problem of determining
-an unknown binomial probability.  Some efficiencies can be gained by
-using a simple group-sequential design, but that does require
-computation to determine its operating characteristics.
+sufficiently low; otherwise known as acceptance sampling.
+Statistically, this is the problem of hypothesis testing on a binomial
+probability.  Some efficiencies can be gained by using a simple
+group-sequential design, but that does require computation to
+determine its operating characteristics.
+
+This is also handled by the ```gsDesign``` R package (specifically the
+```gsBinomialExact``` function therein); this package has one
+essential difference to that one - it is _fast_.
+
+# Example
 
 Herein we suppose that we're sampling a $250000$-item database, and we
 want to be sure that the occurrence probability is less than $0.1\%$.
-We suppose we'll look at the database after $10000$, $30000$, and
-$100000$ items.  After $10000$ items we'll stop sampling if we've seen
-$4$ or fewer cases.  After $30000$ items we'll stop if we've seen $19$
-or fewer cases.  And after $100000$ items we'll stop if we've see $79$
-or fewer cases.
+We suppose we'll look at the database after $5000$, $10000$, $20000$,
+and $100000$ items.  After $5000$ items we'll stop sampling if we've
+seen $0$ cases.  After $10000$ items we'll stop if we've seen
+$3$ or fewer cases.  After $20000$ items we'll stop if we've see $11$
+or fewer cases.  And after $100000$ items we'll stop if we've seen
+$78$ or fewer cases.
 
 ```{r}
-steps <- c(10000, 30000, 100000)
-crits <- c(4, 19, 79)
+steps <- c(5000, 10000, 20000, 100000)
+crits <- c(0, 3, 11, 78)
 ```
 
 We can look at the operating characteristics thereof relatively
@@ -36,50 +46,65 @@ true event probability is $0.1\%$.
 library("dbSamplr")
 
 tot.1 <- gsProbs(0.1/100, steps, crits)
+## stopping probabilities at each stage
 tot.1
+## mean number of records sampled
 tot.1 %*% steps + 250000 * (1 - sum(tot.1))
+## total stopping probability
 sum(tot.1)
 ```
 
-Now we'll see what happens if the true event probability is $0.075\%$.
+Now let's have a look across a range of probabilities.
 
 ```{r}
-tot.2 <- gsProbs(0.075/100, steps, crits)
-tot.2
-tot.2 %*% steps + 250000 * (1 - sum(tot.2))
-sum(tot.2)
+test.probs <- c(0.01, 0.05, 0.075, 0.1, 0.2) / 100
+
+stop.probs <- vapply(test.probs,
+                     FUN=gsProbs, FUN.VALUE=steps,
+                     steps, crits)
 ```
 
-Now we'll see what happens if the true event probability is $0.05\%$.
+The probability of early stopping can then be plotted as a function of
+the _true_ event probability.
 
-```{r}
-tot.3 <- gsProbs(0.05/100, steps, crits)
-tot.3
-tot.3 %*% steps + 250000 * (1 - sum(tot.3))
-sum(tot.3)
+```{r echo=FALSE}
+plot(test.probs, colSums(stop.probs),
+     type='l',
+     xlab="True probability",
+     ylab="Early stopping probability")
 ```
 
-And finally we'll see what happens if the true event probability is
-$0.01\%$.
+The expected sample sizes can also be plotted.
 
-```{r}
-tot.4 <- gsProbs(0.01/100, steps, crits)
-tot.4
-tot.4 %*% steps + 250000 * (1 - sum(tot.4))
-sum(tot.4)
+```{r echo=FALSE}
+plot(test.probs,
+     steps %*% stop.probs + (1 - colSums(stop.probs)) * 250000,
+     type='b',
+     ylab='Expected sample size',
+     xlab='True probability')
 ```
 
-Some plots are possible.
+We can also look at the probability of stopping at each stage.
 
-```{r}
-all.res <- cbind(tot.1, tot.2, tot.3, tot.4)
-
-matplot(steps, all.res,
-        ylim=c(0, 1), type='l',
-	log='x',
-	axes=FALSE,
-	xlab='Sample point',
-	ylab='Stopping probability')
+```{r echo=FALSE}
+matplot(steps, stop.probs, type='l',
+        log="x",
+        axes=FALSE, ylim=c(0, 1),
+        xlab="Sample point",
+        ylab="Stopping probability")
 axis(1, at=steps, label=format(steps, scientific=FALSE))
 axis(2, las=1)
 ```
+
+# Algorithmics
+
+The reason for the speed difference is very simple; this package works
+hard to directly use optimized linear algebra for the matrix vector
+products that are at the heart of the computation, and to minimize
+unnecessary memory traffic.  So everything should work quite nicely if
+your R is built against a decent BLAS / LAPACK.
+
+Note that the algorithms used herein are $O(N^2)$.  With some effort
+it is possible to reduce this to $O(N\log N)$ using the fact that
+Toeplitz matrix vector multiplications can be done using FFT.
+
