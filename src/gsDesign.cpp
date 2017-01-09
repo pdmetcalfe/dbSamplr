@@ -4,20 +4,18 @@
 
 #include <Rcpp.h>
 
+#include <R_ext/BLAS.h>
+
 namespace {
 
-  class bin_gen {
-    public:
-      bin_gen(double prob, int size) : prob(prob), size(size), ind(0) {};
-      double operator()() {
-        return R::dbinom(ind++, size, prob, 0);
-      }
-    private:
-      double prob;
-      int size;
-      int ind;
-  };
-
+  inline void daxpy_wrap(const int num,
+			 const double a,
+			 const double* x,
+			 double* y) {
+    const int one = 1;
+    F77_NAME(daxpy)(&num, &a, x, &one, y, &one);
+  }
+  
 }
 
 //' Simulate simple multiple testing strategy for single binomial event
@@ -42,33 +40,67 @@ Rcpp::NumericVector gsProbs(const double p,
   if (p < 0 || p > 1) {
     throw std::runtime_error("Your probability should be between 0 and 1!");
   }
+
+  if ((sizes[0] < 0) || (crits[0] < 0)) {
+    throw std::runtime_error("Sizes and critical values must be non-negative");
+  }
   
   // fill the probabilities
   std::vector<double> probs(1 + sizes[0]);
-  std::generate(probs.begin(), probs.end(), bin_gen(p, sizes[0]));
+  for (int i=0; i<=sizes[0]; ++i) {
+    probs[i] = R::dbinom(i, sizes[0], p, 0);
+  }
   
   // here's where the result is allocated
   Rcpp::NumericVector result(sizes.size());
 
+  // and after the first look, which is easy
   result[0] = std::accumulate(probs.begin(),
 			      probs.begin() + 1 + crits[0],
 			      double(0));
 
+  /* 
+     Right, now lets go look at the other looks.
+  */
+  
   for (int i=1; i < sizes.size(); ++i) {
-    // how many values are we getting in this step
-    std::vector<double> stepProbs(1 + sizes[i] - sizes[i - 1]);
-    std::generate(stepProbs.begin(), stepProbs.end(),
-		  bin_gen(p, sizes[i] - sizes[i - 1]));
-    std::vector<double> newProb(sizes[i]);
-    for (int j=1 + crits[i-1]; j < probs.size(); ++j) {
-      const int toDo = std::min(stepProbs.size(),
-				newProb.size() - j);
-#pragma omp parallel for
-      for (int k=0;k < toDo; ++k) {
-	newProb[j + k] += probs[j] * stepProbs[k];
-      }
+    if (sizes[i] < sizes[i - 1]) {
+      throw std::runtime_error("Your sizes should be non-decreasing!");
     }
+    if (crits[i] < 0) {
+      throw std::runtime_error("Critical values must be non-negative");
+    }
+
+    /* 
+       The indexing here is:
+         (a) correct
+         (b) hairy
+    */
+
+    // the probability of being in each state at this interim
+    std::vector<double> newProb(1 + sizes[i]);
+
+    /*
+      How many bernoulli moves might have been made between this and
+      the last interim?
+
+      The 1+ includes the possibility of no move.
+    */
     
+    const int num_steps = 1 + sizes[i] - sizes[i - 1];
+    for (int j=0; j < num_steps; ++j) {
+      const double step_prob = R::dbinom(j,
+					 sizes[i] - sizes[i - 1],
+					 p,
+					 0);
+      
+      const int toDo = std::min(sizes[i-1] - crits[i - 1],
+				sizes[i] - crits[i-1] - j);
+      daxpy_wrap(toDo, step_prob,
+		 &probs[1 + crits[i - 1]],
+		 &newProb[1 + crits[i - 1] + j]);
+    }
+
     result[i] = std::accumulate(newProb.begin(),
 				newProb.begin() + 1 + crits[i],
 				double(0));
