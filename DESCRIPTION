@@ -15,8 +15,9 @@ Imports:
 Licence: GPL-2
 LazyData: true
 Suggests:
-    testthat,
+    gsDesign,
     knitr,
-    rmarkdown
+    rmarkdown,
+    testthat
 VignetteBuilder: knitr
 RoxygenNote: 5.0.1
