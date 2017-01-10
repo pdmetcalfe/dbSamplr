@@ -4,18 +4,25 @@
 
 #include <Rcpp.h>
 
-#include <R_ext/BLAS.h>
-
 namespace {
 
-  inline void daxpy_wrap(const int num,
-			 const double a,
-			 const double* x,
-			 double* y) {
-    const int one = 1;
-    F77_NAME(daxpy)(&num, &a, x, &one, y, &one);
+  inline void daxpy(const int num,
+		    const double a,
+		    const double* x,
+		    double* y) {
+    /*
+      Many of the probabilities are interestingly low
+    
+
+      So bale out if we can.
+    */
+      
+    if (a==0) return;
+
+    for (int i=0; i < num; ++i) {
+      y[i] += a * x[i];
+    }
   }
-  
 }
 
 //' Simulate simple multiple testing strategy for single binomial event
@@ -96,9 +103,9 @@ Rcpp::NumericVector gsProbs(const double p,
       
       const int toDo = std::min(sizes[i-1] - crits[i - 1],
 				sizes[i] - crits[i-1] - j);
-      daxpy_wrap(toDo, step_prob,
-		 &probs[1 + crits[i - 1]],
-		 &newProb[1 + crits[i - 1] + j]);
+      daxpy(toDo, step_prob,
+	    &probs[1 + crits[i - 1]],
+	    &newProb[1 + crits[i - 1] + j]);
     }
 
     result[i] = std::accumulate(newProb.begin(),

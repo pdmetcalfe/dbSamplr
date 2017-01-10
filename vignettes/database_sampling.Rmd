@@ -98,11 +98,8 @@ axis(2, las=1)
 
 # Algorithmics
 
-The reason for the speed difference is very simple; this package works
-hard to directly use optimized linear algebra for the matrix vector
-products that are at the heart of the computation, and to minimize
-unnecessary memory traffic.  So everything should work quite nicely if
-your R is built against a decent BLAS / LAPACK.
+The reason for the speed difference is very simple; this package very 
+carefully doesn't do anything it knows it doesn't need to.
 
 Note that the algorithms used herein are $O(N^2)$.  With some effort
 it is possible to reduce this to $O(N\log N)$ using the fact that
